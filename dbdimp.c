@@ -1528,6 +1528,8 @@ MYSQL *mysql_dr_connect(
   MYSQL* result;
   dTHX;
   D_imp_xxh(dbh);
+  char *fabric_group=0, *fabric_default_mode= 0;
+  char *fabric_real_user= 0, *fabric_real_password= 0;
 
   /* per Monty, already in client.c in API */
   /* but still not exist in libmysqld.c */
@@ -1902,6 +1904,20 @@ MYSQL *mysql_dr_connect(
 	  mysql_options(sock, MYSQL_OPT_LOCAL_INFILE, (const char *) &flag);
 	}
 #endif
+
+        // Added by yoku0825.
+        if ((svp= hv_fetch(hv, "fabric_group", 12, FALSE)) && *svp)
+        {
+          fabric_group= SvPV(*svp, lna);
+          mysql_options(sock, MYSQL_OPT_USE_FABRIC, NULL);
+          if ((svp= hv_fetch(hv, "fabric_real_user", 16, FALSE)) && *svp)
+            fabric_real_user= SvPV(*svp, lna);
+          if ((svp= hv_fetch(hv, "fabric_real_password", 20, FALSE)) && *svp)
+            fabric_real_password= SvPV(*svp, lna);
+          if ((svp= hv_fetch(hv, "fabric_default_mode", 19, FALSE)) && *svp)
+            fabric_default_mode= SvPV(*svp, lna);
+        }
+
       }
     }
     if (DBIc_TRACE_LEVEL(imp_xxh) >= 2)
@@ -1911,10 +1927,19 @@ MYSQL *mysql_dr_connect(
 #if MYSQL_VERSION_ID >= MULTIPLE_RESULT_SET_VERSION
     client_flag|= CLIENT_MULTI_RESULTS;
 #endif
+
     result = mysql_real_connect(sock, host, user, password, dbname,
 				portNr, mysql_socket, client_flag);
     if (DBIc_TRACE_LEVEL(imp_xxh) >= 2)
       PerlIO_printf(DBIc_LOGPIO(imp_xxh), "imp_dbh->mysql_dr_connect: <-");
+
+    // Added by yoku0825.
+    if (fabric_group && fabric_real_user && fabric_real_password)
+    {
+      mysql_options(sock, FABRIC_OPT_GROUP, fabric_group);
+      mysql_options(sock, FABRIC_OPT_DEFAULT_MODE, fabric_default_mode);
+      mysql_options4(sock, FABRIC_OPT_GROUP_CREDENTIALS, fabric_real_user, fabric_real_password);
+    }
 
     if (result)
     {
